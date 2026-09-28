@@ -1,1 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite it as below."
+title: "Analysis code for Biosurveillance and recombinant virology toolkit for Erve virus"
+type: software
 
+authors:
+  - family-names: "Starinskij"
+    given-names: "Igor"
+
+version: "1.0.0"
+date-released: "2026-09-28"
+
+repository-code: "https://github.com/stariig/Starinskij-PhD-code"
+
+license: "MIT"
+
+DOI: ""

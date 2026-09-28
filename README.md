@@ -1,6 +1,6 @@
 
 
-# PhD thesis analysis code
+# Analysis code for Biosurveillance and recombinant virology toolkit for Erve virus
 
 This repository contains the Python and R scripts used for data processing, statistical analysis and figure generation associated with the PhD thesis:
 

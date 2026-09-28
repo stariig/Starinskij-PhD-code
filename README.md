@@ -7,8 +7,11 @@ This repository contains the Python and R scripts used for data processing, stat
 **Biosurveillance and recombinant virology toolkit for Erve virus**
 
 **Author:** Igor Starinskij
+
 **Institution:** University of Glasgow
+
 **Department/School:** College of Medical, Veterinary, and Life Sciences. School of Infection & Immunity
+
 **Year:** 2026
 
 The repository contains the analysis code corresponding to the version of the analyses reported in the submitted thesis.

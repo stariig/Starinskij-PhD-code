@@ -227,7 +227,8 @@ Citation information is provided in [`CITATION.cff`](CITATION.cff).
 
 The archived thesis release is available at:
 
-**DOI:** ""
+**DOI:** 10.5281/zenodo.23023911
+https://doi.org/10.5281/zenodo.23023911
 
 ---
 

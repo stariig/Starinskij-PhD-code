@@ -1,0 +1,221 @@
+---
+title: "Fisher's Exact Test"
+author: "Igor Starinskij"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+---
+
+```
+#06_fisher.exact.rmd
+
+#Purpose:
+#    Run a fisher exact test with Benjamini-Hochberg adjustment.
+
+#Input:
+#    Excel workbook containing a contingency table.  
+
+#Output:
+#   1. .html document with analysis flowthrough and outputs
+#	2. .csv with p values pre and post multiple comparisons correction
+
+#Thesis:
+#    Chapter: ERVEV biosurveillance survey
+
+#Author:
+#    Igor Starinskij
+
+#AI assistance:
+#   Generative artificial intelligence tools, primarily GitHub Copilot 0.63.0 (GPT-5.6 Luna), were used during the development of software used in this thesis.
+#	AI was used to assist with R code generation, debugging, code refinement and explanation of programming concepts.
+#	Generated code was reviewed, modified, tested and validated by the author.
+#	The analytical methodology, statistical decisions, interpretation of results and final responsibility for the analyses remain with the author.
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Import the workbook
+
+Select an Excel workbook containing a sheet named `fisher`. The sheet must contain
+numeric, non-negative counts arranged as a contingency table. A first non-numeric
+column may be used for row labels.
+
+```{r import}
+if (!requireNamespace("readxl", quietly = TRUE)) {
+	stop("This report requires the 'readxl' package. Install it with install.packages('readxl').")
+}
+
+file_path <- file.choose()
+available_sheets <- readxl::excel_sheets(file_path)
+
+if (!"fisher" %in% available_sheets) {
+	stop("The selected workbook does not contain a sheet named 'fisher'.")
+}
+
+df <- readxl::read_excel(file_path, sheet = "fisher", .name_repair = "unique")
+
+if (nrow(df) == 0L || ncol(df) == 0L) {
+	stop("The 'fisher' sheet is empty.")
+}
+
+knitr::kable(df, caption = "Imported data")
+```
+
+## Validate the contingency table
+
+The first column is treated as row labels when it is not numeric. All remaining
+columns must then be numeric counts. If the first column is numeric, every column
+is treated as part of the table.
+
+```{r validate}
+is_numeric_column <- vapply(df, is.numeric, logical(1))
+has_label_column <- !is_numeric_column[[1L]]
+
+if (has_label_column) {
+	row_labels <- as.character(df[[1L]])
+	count_data <- df[-1L]
+} else {
+	row_labels <- rownames(df)
+	count_data <- df
+}
+
+if (nrow(count_data) < 2L || ncol(count_data) < 2L) {
+	stop("The 'fisher' sheet must contain at least two rows and two columns of counts.")
+}
+
+if (!all(vapply(count_data, is.numeric, logical(1)))) {
+	stop("All contingency-table cells must be numeric. Check the headers and count columns.")
+}
+
+observed <- as.matrix(count_data)
+storage.mode(observed) <- "numeric"
+
+if (anyNA(observed) || any(!is.finite(observed))) {
+	stop("The contingency table contains missing or non-finite values.")
+}
+
+if (any(observed < 0) || any(observed != floor(observed))) {
+	stop("Contingency-table cells must be non-negative whole-number counts.")
+}
+
+if (any(rowSums(observed) == 0) || any(colSums(observed) == 0)) {
+	stop("Rows and columns must each contain at least one observed count.")
+}
+
+rownames(observed) <- row_labels
+colnames(observed) <- names(count_data)
+
+cat("Workbook:", basename(file_path), "\n")
+cat("Sheet: fisher\n\n")
+cat("Observed contingency table:\n")
+print(observed)
+```
+
+## Expected counts and statistical test
+
+```{r analysis}
+chi_square <- suppressWarnings(stats::chisq.test(observed, correct = FALSE))
+expected <- chi_square$expected
+
+cat("Expected counts under independence:\n")
+print(round(expected, 4))
+
+cat("\nMinimum expected count:", round(min(expected), 4), "\n")
+cat("Chi-square test p-value:", format.pval(chi_square$p.value), "\n")
+
+if (any(expected < 5)) {
+	    set.seed(123)
+    
+        fisher_result <- tryCatch(
+         stats::fisher.test(observed, workspace = 2e8),
+        error = function(error) {
+            if (!grepl("FEXACT error 7", conditionMessage(error), fixed = TRUE)) {
+                stop(error)
+            }
+    
+            stats::fisher.test(
+            observed,
+            simulate.p.value = TRUE,
+            B = 100000
+        )
+      }
+    )
+
+	cat("\nAt least one expected count is less than 5.\n")
+	cat("Fisher's exact test p-value:", format.pval(fisher_result$p.value), "\n")
+    cat("Test method:", fisher_result$method, "\n")
+
+	if (fisher_result$p.value < 0.05) {
+		row_test <- function(row_index) {
+			row_vs_rest <- rbind(
+				observed[row_index, , drop = FALSE],
+				colSums(observed[-row_index, , drop = FALSE])
+			)
+			rownames(row_vs_rest) <- c(rownames(observed)[row_index], "All other rows")
+
+			tryCatch(
+				stats::fisher.test(row_vs_rest, workspace = 2e8),
+				error = function(error) {
+					if (!grepl("FEXACT error 7", conditionMessage(error), fixed = TRUE)) {
+						stop(error)
+					}
+
+					stats::fisher.test(
+						row_vs_rest,
+						simulate.p.value = TRUE,
+						B = 100000
+					)
+				}
+			)
+		}
+
+		row_tests <- lapply(seq_len(nrow(observed)), row_test)
+		row_results <- data.frame(
+			row = rownames(observed),
+			p_value = vapply(row_tests, function(test) test$p.value, numeric(1)),
+			method = vapply(row_tests, function(test) test$method, character(1)),
+			stringsAsFactors = FALSE
+		)
+		row_results$adjusted_p_value_BH <- p.adjust(row_results$p_value, method = "BH")
+		row_results$significant_after_BH <- row_results$adjusted_p_value_BH < 0.05
+
+		row_results_path <- file.path(
+			dirname(file_path),
+			paste0(tools::file_path_sans_ext(basename(file_path)), "_fisher_row_tests.csv")
+		)
+		utils::write.csv(row_results, row_results_path, row.names = FALSE)
+		cat("\nGlobal Fisher/Monte Carlo p-value is below 0.05.\n")
+		cat("Row-vs-rest results saved to:", row_results_path, "\n")
+	} else {
+		cat("\nGlobal Fisher/Monte Carlo p-value is not below 0.05; row-vs-rest tests were not performed.\n")
+	}
+
+	fisher_result
+} else {
+	cat("\nAll expected counts are at least 5; Fisher's exact test was not performed.\n")
+}
+```
+
+## Reported results
+
+```{r results, results='asis'}
+cat("- Input file: `", basename(file_path), "`\n", sep = "")
+cat("- Observed table dimensions: ", nrow(observed), " x ", ncol(observed), "\n", sep = "")
+cat("- Minimum expected count: ", round(min(expected), 4), "\n", sep = "")
+cat("- Chi-square p-value: ", format.pval(chi_square$p.value), "\n", sep = "")
+
+if (exists("fisher_result")) {
+	cat("- Fisher's exact test p-value: ", format.pval(fisher_result$p.value), "\n", sep = "")
+	if (exists("row_results")) {
+		cat("- Row-vs-rest results saved to: `", basename(row_results_path), "`\n", sep = "")
+		knitr::kable(row_results, digits = 6, caption = "Row-vs-rest Fisher tests with Benjamini-Hochberg adjustment")
+	} else {
+		cat("- Row-vs-rest tests: not performed because the global p-value is not below 0.05.\n")
+	}
+} else {
+	cat("- Fisher's exact test: not required because all expected counts are at least 5.\n")
+}
+```

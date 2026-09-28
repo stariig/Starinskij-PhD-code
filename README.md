@@ -34,7 +34,6 @@ phd-analysis-code/
 ├── README.md
 ├── CITATION.cff
 ├── LICENSE
-├── .gitignore
 │
 ├── python/
 │   ├── requirements.txt
@@ -88,7 +87,7 @@ Create an ELISA heatmap from a user-selected Excel workbook.
 
 Analyse ELISA data from a user-selected Excel workbook and generate a results workbook.
 	Analyse PV neutralisation data from a user-selected Excel workbook and generate a results workbook.
-	Generatise PV neutralisation graphs from the results workbook.
+	Generate PV neutralisation graphs from the results workbook.
 
 #### `05_histograms`
 
